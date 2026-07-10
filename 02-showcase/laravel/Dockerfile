@@ -1,6 +1,7 @@
 # Pawmise API — Railway deploy image (single web process).
 # Root directory for the Railway service must be 02-showcase/laravel.
-FROM php:8.3-cli-bookworm
+# Laravel 13 / Symfony 8.1 lockfile requires PHP >= 8.4.1.
+FROM php:8.4-cli-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git unzip libzip-dev libonig-dev \
@@ -17,6 +18,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progre
 # Railway injects $PORT. Migrations + seed are idempotent (safe on every boot).
 # `artisan serve` is fine for a low-traffic reviewer demo; swap for FrankenPHP
 # or php-fpm+nginx for real production traffic.
+# Seed is idempotent and non-fatal — a seed hiccup must never stop the API booting.
 CMD php artisan migrate --force \
-    && php artisan db:seed --force \
+    && (php artisan db:seed --force || echo "seed skipped") \
     && php artisan serve --host 0.0.0.0 --port "${PORT:-8000}"
