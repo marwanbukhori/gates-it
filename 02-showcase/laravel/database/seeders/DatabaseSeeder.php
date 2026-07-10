@@ -18,10 +18,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->create([
-            'name'  => 'Demo Adopter',
-            'email' => 'demo@pawmise.test',
-        ]);
+        // Idempotent so it is safe to run on every deploy/boot in production.
+        User::firstOrCreate(
+            ['email' => 'demo@pawmise.test'],
+            ['name' => 'Demo Adopter', 'password' => 'password'],
+        );
+
+        if (Pet::query()->exists()) {
+            return;
+        }
 
         Pet::factory()->count(16)->create();
         Pet::factory()->count(4)->senior()->create();
