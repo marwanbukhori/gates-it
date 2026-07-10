@@ -38,3 +38,7 @@ Thumbs.db
 
 # Misc
 *.log
+
+# local browser/screenshot artifacts
+.playwright-mcp/
+pawmise-live.png
