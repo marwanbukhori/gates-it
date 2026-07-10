@@ -10,6 +10,14 @@ final class Dog extends Pet {
     required super.breed,
     this.isTrained = false,
     super.isAdopted,
+    super.size,
+    super.gender,
+    super.description,
+    super.imageUrl,
+    super.baseFee,
+    super.currency,
+    super.shelterPartner,
+    super.isSenior,
   });
 
   @override
@@ -24,6 +32,14 @@ final class Dog extends Pet {
       breed: breed,
       isTrained: isTrained ?? this.isTrained,
       isAdopted: isAdopted ?? this.isAdopted,
+      size: size,
+      gender: gender,
+      description: description,
+      imageUrl: imageUrl,
+      baseFee: baseFee,
+      currency: currency,
+      shelterPartner: shelterPartner,
+      isSenior: isSenior,
     );
   }
 }
