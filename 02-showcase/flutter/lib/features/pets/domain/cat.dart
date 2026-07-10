@@ -10,6 +10,14 @@ final class Cat extends Pet {
     required super.breed,
     this.isIndoor = true,
     super.isAdopted,
+    super.size,
+    super.gender,
+    super.description,
+    super.imageUrl,
+    super.baseFee,
+    super.currency,
+    super.shelterPartner,
+    super.isSenior,
   });
 
   @override
@@ -24,6 +32,14 @@ final class Cat extends Pet {
       breed: breed,
       isIndoor: isIndoor ?? this.isIndoor,
       isAdopted: isAdopted ?? this.isAdopted,
+      size: size,
+      gender: gender,
+      description: description,
+      imageUrl: imageUrl,
+      baseFee: baseFee,
+      currency: currency,
+      shelterPartner: shelterPartner,
+      isSenior: isSenior,
     );
   }
 }
