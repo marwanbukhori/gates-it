@@ -40,7 +40,7 @@ Note: the original `LoyaltyDiscount` strategy computes a fixed 85%-off discount.
 **Trade-offs.**
 
 - More indirection: `AdoptionFeeCalculator` → `DiscountStrategyFactory` → strategy. But the composition is easy to follow and each step is independently testable.
-- The "best single discount wins" rule (vs stacking) is centralised in `AdoptionFeeCalculator::selectBest()`. Changing to stacking means touching exactly one method. That is the correct shape for this kind of business rule.
+- The "best single discount wins" rule (vs stacking) is centralised in `AdoptionFeeCalculator::quote()`, which weighs the candidates built by `candidatesFor()`. Changing to stacking means touching exactly one method. That is the correct shape for this kind of business rule.
 - Fee thresholds and rates live in `config/pawmise.php`. No magic numbers in the domain.
 
 **Why this matters.** Open/Closed Principle is often name-dropped but rarely demonstrated. Here it is paying off visibly: a new product requirement (adoption fees) is satisfied without modifying a single line of existing, tested code.

@@ -8,7 +8,10 @@ return [
     // Repeat-adopter reward. Uses the existing LoyaltyDiscount strategy (15% off).
     'loyalty' => [
         'threshold'  => 3,     // prior completed adoptions required to qualify
-        'percentage' => 15.0,  // documented for transparency; LoyaltyDiscount is fixed at 15%
+        // The fee engine applies this via PercentageDiscount(15%). Note: the
+        // engine's LoyaltyDiscount strategy is intentionally NOT used — it
+        // computes 85% off, which is wrong for a real adoption fee.
+        'percentage' => 15.0,
     ],
 
     // Encourage senior-pet adoption.

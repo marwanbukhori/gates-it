@@ -21,7 +21,7 @@ The backend grew from a stateless discount calculator into a real product API. T
  GET  /pets              ──▶  PetController          ──▶   Pet model (Eloquent)
  GET  /pets/{id}
 
- GET  /pets/{id}/        ──▶  FeeQuoteController     ──▶   AdoptionFeeCalculator
+ GET  /pets/{id}/        ──▶  AdoptionController     ──▶   AdoptionFeeCalculator
       fee-quote                                             │
                                                            ├── PercentageDiscount (loyalty)
  POST /pets/{id}/adopt   ──▶  AdoptionController     ──▶   ├── PercentageDiscount (senior)
@@ -155,7 +155,7 @@ lib/
         │   └── pet_repository.dart        abstract interface class
         ├── data/                          ← concrete impls
         │   ├── in_memory_pet_repository.dart
-        │   └── http_pet_repository.dart   (wired to live backend)
+        │   └── api_pet_repository.dart    (wired to live backend)
         ├── application/                   ← state + intent
         │   ├── pet_filter.dart            enum
         │   └── pet_providers.dart         Riverpod providers + controllers

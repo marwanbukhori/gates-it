@@ -243,7 +243,7 @@ void main() {
       final client = MockClient((_) async => http.Response('{"error":"server error"}', 500));
       final repo = _repoWith(client);
 
-      expect(
+      await expectLater(
         () => repo.fetchAll(),
         throwsA(isA<PetApiException>().having(
           (e) => e.statusCode,
@@ -279,7 +279,7 @@ void main() {
       final client = MockClient((_) async => http.Response('{"error":"not found"}', 404));
       final repo = _repoWith(client);
 
-      expect(
+      await expectLater(
         () => repo.fetchById('999'),
         throwsA(isA<PetNotFoundException>().having((e) => e.id, 'id', '999')),
       );
