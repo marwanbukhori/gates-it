@@ -60,6 +60,30 @@ final class AdoptFlowTest extends TestCase
     }
 
     #[Test]
+    public function adopt_applies_loyalty_from_prior_count_then_increments(): void
+    {
+        // Guards the CRITICAL invariant: the fee is quoted from the adopter's
+        // PRIOR adoptions_count (3 => loyalty), and the count is incremented
+        // only after the record is written.
+        $user = User::factory()->create(['adoptions_count' => 3]);
+        $pet  = Pet::factory()->create(['base_fee' => 200, 'age_years' => 2, 'shelter_partner' => false]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/pets/{$pet->id}/adopt")
+            ->assertCreated()
+            ->assertJsonPath('data.discount_type', 'loyalty')
+            ->assertJsonPath('data.final_fee', 170);
+
+        $this->assertSame(4, $user->fresh()->adoptions_count);
+        $this->assertDatabaseHas('adoptions', [
+            'user_id'       => $user->id,
+            'pet_id'        => $pet->id,
+            'discount_type' => 'loyalty',
+            'final_fee'     => 170,
+        ]);
+    }
+
+    #[Test]
     public function adopting_an_already_adopted_pet_returns_409(): void
     {
         $user = User::factory()->create();

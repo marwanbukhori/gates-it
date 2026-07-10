@@ -209,7 +209,7 @@ Replacing Riverpod with Bloc would touch only `application/` and `presentation/`
    ┌───────────────────────┐
    │ petRepositoryProvider │
    │  (Provider — bound to │
-   │   HttpPetRepository)  │
+   │   ApiPetRepository)   │
    └───────────────────────┘
 ```
 
