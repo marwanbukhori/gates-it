@@ -2,57 +2,52 @@
 
 ## The short version
 
-GATES IT Solution sent me a coding assessment. It has two parts:
+GATES IT Solution sent me a coding assessment with two tasks:
 
-1. **Laravel** — build a discount system for an e-commerce app (fixed / percentage / loyalty discounts)
-2. **Flutter** — build a mobile screen that lists adoptable pets and lets you filter and mark them as adopted
+1. **Laravel** — build a discount system (fixed / percentage / loyalty discounts)
+2. **Flutter** — build a mobile screen that lists adoptable pets with filtering and an adopt action
 
-This repository contains my answer, delivered as **two folders**:
+This repository contains my answer, delivered in two folders with a clear, honest boundary between them.
 
-- **`01-answers/`** — a straightforward answer to the marking sheet
-- **`02-showcase/`** — the same problems built to production quality, to show how I actually engineer software
+## The two folders
 
-Everything runs. Everything is tested. I ran it locally before sending it.
+**`01-answers/`** is the direct answer to the marking sheet. Written by hand, no AI. Every rubric item maps to an exact file. If you're grading, start here — it takes about five minutes and everything is tested.
+
+**`02-showcase/`** is the same problems, evolved into a real product called **Pawmise**. Pawmise is a pet-adoption platform with a Laravel API backend and a Flutter app that talks to it. It was built using AI-driven development (Claude + the `superpowers` plugin) — documented transparently in [`docs/how-02-was-built.md`](how-02-was-built.md).
+
+The assessment says "the answer must not be built with AI". The answer (`01-answers/`) isn't. `02-showcase/` is something different: a demonstration that I can direct AI to produce production-quality software. Full transparency, no rule-bending.
+
+## What Pawmise is
+
+Pawmise unifies both assessment tasks into one product:
+
+- The **Flutter app** is the user-facing product — browse pets, see adoption fees, adopt.
+- The **Laravel backend** is the real API — authentication, pet catalogue, adoption flow.
+- The **discount engine** from the assessment is reused, unchanged, as the adoption-fee calculator: loyalty discount for repeat adopters, percentage off for senior pets, fixed waiver for shelter-partner pets.
+
+That last point is not just a cute story — it shows that good domain design makes reuse free. The `Domain/Discount` layer didn't need a single line changed to become the fee engine of a different product.
 
 ## What each mark is worth
 
-The Laravel part is out of **7 marks**. The Flutter part is out of **5 marks**. I hit every mark in both folders.
+The Laravel part is out of **7 marks**. The Flutter part is out of **5 marks**. Both are fully met in `01-answers/`.
 
-Each project has a table in its own README (a "rubric map") that links every marking-sheet item to the exact file that fulfils it. If you're grading, that table is where to start.
+Each project has a table in its own README (a "rubric map") linking every marking-sheet item to the exact file. See [`docs/evaluator-guide.md`](evaluator-guide.md) for a combined view.
 
-## What the "showcase" folder adds beyond the marking sheet
+## What the showcase adds
 
-The marking sheet asks for the classes to exist. The showcase folder shows what I do *after* the classes exist:
+`01-answers/` proves I can write the classes. `02-showcase/` shows what I do after the classes exist.
 
-**On the Laravel side:**
-- A clean separation between business logic and framework code
-- A proper API endpoint (`POST /api/v1/discount`) with structured error responses
-- A test suite that covers not just the classes but the full HTTP flow (28 tests)
-- Docker Compose for reproducible local dev
-- An OpenAPI 3.1 specification and a Postman collection for consumers of the API
-- A GitHub Actions workflow that runs the tests on every push
+**On the Laravel side** (now a real product API):
+- Sanctum authentication, pets listing and filtering, a transactional adopt flow
+- The discount engine composed as an adoption-fee calculator (`AdoptionFeeCalculator`)
+- Every endpoint and the full fee engine covered by an automated test suite
+- Docker Compose, OpenAPI 3.1 spec, Postman collection, GitHub Actions CI
 
-**On the Flutter side:**
-- A "feature-first" folder structure that scales as the app grows
-- Riverpod for state management (industry-standard for medium-to-large Flutter apps)
-- A custom Material 3 theme with hand-picked colors and typography, not the default
-- A layout that reflows from one column on a phone to four columns on a desktop — same code
-- Loading skeletons, empty states, animated transitions when a pet is adopted
-- Accessibility labels so screen readers describe the content correctly
-- 12 tests covering models, state logic, and the UI
-
-## Time and effort
-
-I built this end-to-end in a single working session. Everything was written by me, then verified by running the actual test suites and taking real screenshots of the live app.
-
-## What I want you to notice
-
-If you're technical, the two folders side-by-side tell you what I care about:
-
-- **`01-answers/laravel/app/Services/DiscountService.php`** works.
-- **`02-showcase/laravel/app/Domain/Discount/DiscountService.php`** works *and* is easy to extend, easy to test, and easy to hand to another engineer.
-
-The difference between those two files — same problem, same seven marks — is what senior work looks like. That's the version of me I'd bring to your team.
+**On the Flutter side** (now wired to the live backend):
+- Real API calls via Riverpod `AsyncNotifier` providers
+- Adaptive layout (1–4 columns, same code, `LayoutBuilder`)
+- Custom Material 3 theme — hand-picked palette, not a seeded default
+- Skeleton loaders, empty states, animated adopt transition, accessibility labels
 
 ## Contact
 

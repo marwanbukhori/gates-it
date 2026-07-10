@@ -6,17 +6,48 @@ Numbering doesn't reflect priority; it's just for cross-referencing.
 
 ---
 
-## 1. Two folders instead of one
+## 1. Two folders instead of one — and the honest AI boundary
 
 **Context.** The assessment asks for classes to exist. My value as an engineer isn't proving I can write those classes — it's showing what I do *after* they exist. But I also can't dump a 500-file codebase on an evaluator and expect them to find the rubric answers.
 
-**Decision.** Ship two versions of the same problem side-by-side. `01-answers/` is a minimal, rubric-focused answer that grades in five minutes. `02-showcase/` is production-grade — architecture, testing, ops, polish. The evaluator can grade the rubric quickly, then optionally look at the depth.
+The brief also says the answer must not be built with AI. That constraint is real and I take it seriously.
 
-**Trade-offs.** More total code to maintain. Some duplication. But two small folders that each do one job well beat one folder that tries to be both a fast grade and a portfolio piece.
+**Decision.** Ship two parts with an explicit, documented boundary.
+
+`01-answers/` is a minimal, rubric-focused answer written by hand with no AI involvement. Every mark is mapped to a file. It grades in five minutes. This is what satisfies the "no AI" rule.
+
+`02-showcase/` is the same problems evolved into **Pawmise**, a real product built with AI-driven development (Claude + the `superpowers` plugin). This is not a disguised attempt to sneak AI into the answer — it is a transparent, documented demonstration that I can direct AI to produce production-quality software. The process (brainstorm → spec → plan → subagent execution with review gates) is in [`how-02-was-built.md`](how-02-was-built.md).
+
+**Trade-offs.** More total code. Two separate READMEs to maintain. Some duplication of domain concepts. But the alternative — mixing the rubric answer and the portfolio piece — would make both worse. The boundary makes each folder's purpose unambiguous.
+
+**Why frame AI fluency as a strength rather than hiding it?** Because in 2026, the ability to write precise technical specs, review AI-generated code for correctness and architecture fit, and direct a toolchain to produce tested, deployable software is a real engineering skill. Hiding it would be less honest and less interesting.
 
 ---
 
-## 2. `01-answers/` uses `instanceof` in the service; `02-showcase/` doesn't
+## 2. Reusing the discount engine as the adoption-fee engine — compose, don't rewrite
+
+**Context.** Pawmise needs adoption fees: loyalty discounts for repeat adopters, percentage off for senior pets, fixed waivers for shelter-partner pets. That sounds familiar — the assessment already has a `DiscountStrategyInterface` with exactly those strategies. The obvious temptation is to adapt or extend the domain classes.
+
+**Decision.** Compose the existing `Domain/Discount` layer from a new `Domain/Adoption/AdoptionFeeCalculator` class. The discount strategies are not modified. `DiscountService` is not modified. The fee calculator orchestrates *which* strategy applies for a given pet and user, then delegates the arithmetic via the existing interface.
+
+The mapping:
+- Repeat adopter (`user.adoptions_count ≥ N`) → `PercentageDiscount` with a configurable loyalty rate
+- Senior pet (`pet.age_years ≥ 8`) → `PercentageDiscount` with a configurable senior rate
+- Shelter-partner pet → `FixedDiscount` with a configurable waiver amount
+
+Note: the original `LoyaltyDiscount` strategy computes a fixed 85%-off discount. The fee engine intentionally uses `PercentageDiscount` with a configurable rate instead — the semantics of a configurable loyalty percentage are correct for a real product; the hardcoded 85% is an implementation of the rubric's specific formula. The legacy `POST /discount` endpoint still exercises all three original strategies unchanged, so nothing is removed from the assessment.
+
+**Trade-offs.**
+
+- More indirection: `AdoptionFeeCalculator` → `DiscountStrategyFactory` → strategy. But the composition is easy to follow and each step is independently testable.
+- The "best single discount wins" rule (vs stacking) is centralised in `AdoptionFeeCalculator::selectBest()`. Changing to stacking means touching exactly one method. That is the correct shape for this kind of business rule.
+- Fee thresholds and rates live in `config/pawmise.php`. No magic numbers in the domain.
+
+**Why this matters.** Open/Closed Principle is often name-dropped but rarely demonstrated. Here it is paying off visibly: a new product requirement (adoption fees) is satisfied without modifying a single line of existing, tested code.
+
+---
+
+## 3. `01-answers/` uses `instanceof` in the service; `02-showcase/` doesn't
 
 **Context.** The rubric says the service must validate: percentages 0–100, fixed amounts ≤ price. The obvious way is `if ($strategy instanceof PercentageDiscount) { … }` inside `DiscountService`.
 
@@ -31,7 +62,7 @@ I wanted the diff between the two folders to be obvious, so I picked this delibe
 
 ---
 
-## 3. Custom `InvalidDiscountException` + `render()` instead of `BadRequestHttpException`
+## 4. Custom `InvalidDiscountException` + `render()` instead of `BadRequestHttpException`
 
 **Context.** The rubric says throw an HTTP 400. `symfony/http-kernel`'s `BadRequestHttpException` does exactly that.
 
@@ -49,7 +80,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 4. Form Request instead of inline `$request->validate()`
+## 5. Form Request instead of inline `$request->validate()`
 
 **Context.** Laravel controllers can call `$request->validate([...])` inline. It's shorter.
 
@@ -63,7 +94,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 5. `Rule::enum(DiscountStrategyType::class)` instead of `in:fixed,percentage,loyalty`
+## 6. `Rule::enum(DiscountStrategyType::class)` instead of `in:fixed,percentage,loyalty`
 
 **Context.** Both work.
 
@@ -73,7 +104,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 6. `DiscountStrategyFactory` bound as a container singleton
+## 7. `DiscountStrategyFactory` bound as a container singleton
 
 **Context.** The controller could build strategies via a `match` expression directly. That was the `01-answers/` approach.
 
@@ -87,7 +118,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 7. API versioned from day one — `/api/v1/`
+## 8. API versioned from day one — `/api/v1/`
 
 **Context.** The endpoint could sit at `/api/discount`.
 
@@ -97,7 +128,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 8. Riverpod (not Bloc, not Provider, not ChangeNotifier)
+## 9. Riverpod (not Bloc, not Provider, not ChangeNotifier)
 
 **Context.** Flutter has half a dozen viable state solutions.
 
@@ -113,7 +144,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 9. `PetRepository` as an `abstract interface class`
+## 10. `PetRepository` as an `abstract interface class`
 
 **Context.** Dart lets me use a bare class as an interface. The `abstract interface class` keyword is Dart 3+.
 
@@ -123,7 +154,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 10. Immutable `Pet` with per-subclass `copyWith`
+## 11. Immutable `Pet` with per-subclass `copyWith`
 
 **Context.** The `01-answers/` version has `bool isAdopted` mutable and calls `pet.adopt()` to flip it. Simple, works with `setState`.
 
@@ -139,7 +170,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 11. Species-specific `copyWith` signatures
+## 12. Species-specific `copyWith` signatures
 
 **Context.** I could give `Pet` a single `copyWith({bool? isAdopted, bool? isTrained, bool? isIndoor})` where the irrelevant fields are ignored per subclass. Simple.
 
@@ -149,7 +180,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 12. Seedless Material 3 palette
+## 13. Seedless Material 3 palette
 
 **Context.** `ColorScheme.fromSeed(seedColor: Colors.teal)` gives a serviceable Material 3 scheme in one line.
 
@@ -159,7 +190,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 13. Fraunces + Plus Jakarta Sans typography
+## 14. Fraunces + Plus Jakarta Sans typography
 
 **Context.** Roboto (Android default) or SF Pro (iOS default) would work.
 
@@ -169,7 +200,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 14. `LayoutBuilder`-driven column count instead of `MediaQuery`
+## 15. `LayoutBuilder`-driven column count instead of `MediaQuery`
 
 **Context.** I could read `MediaQuery.of(context).size.width` at the top of the tree and pass it down.
 
@@ -183,7 +214,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 15. `AnimatedSwitcher` for the "adopt" transition
+## 16. `AnimatedSwitcher` for the "adopt" transition
 
 **Context.** Toggling `isAdopted` could just re-render the card with a different button.
 
@@ -193,7 +224,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 16. Staggered enter animation for the grid
+## 17. Staggered enter animation for the grid
 
 **Context.** Grid items appear all at once when the async load completes.
 
@@ -203,7 +234,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 17. Shimmer skeleton instead of a spinner
+## 18. Shimmer skeleton instead of a spinner
 
 **Context.** `CircularProgressIndicator` is one line.
 
@@ -213,7 +244,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 18. Semantics labels on cards and filter chips
+## 19. Semantics labels on cards and filter chips
 
 **Context.** Flutter widgets get some semantics by default (buttons announce as buttons, etc.).
 
@@ -225,7 +256,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 19. Docker Compose (nginx + php-fpm + mysql) as an alternative to `artisan serve`
+## 20. Docker Compose (nginx + php-fpm + mysql) as an alternative to `artisan serve`
 
 **Context.** `php artisan serve` works fine for local dev.
 
@@ -237,7 +268,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 20. OpenAPI 3.1 + Postman collection
+## 21. OpenAPI 3.1 + Postman collection
 
 **Context.** The rubric doesn't ask for API documentation.
 
@@ -247,7 +278,7 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## 21. GitHub Actions CI
+## 22. GitHub Actions CI
 
 **Context.** Tests pass locally.
 
@@ -257,14 +288,20 @@ Junior devs often skip this because "an exception is an exception". Senior devs 
 
 ---
 
-## Things I *didn't* do
+## Things I *didn't* do (in `01-answers/`)
 
-Not everything is a mystery. A few things I deliberately left out:
+Not everything is a mystery. A few things I deliberately left out of the rubric answer:
 
 - **No frontend for the Laravel discount API.** The rubric is backend-only. Building a React form would obscure what's actually being graded.
 - **No pet detail screen in Flutter.** The brief describes a list with filtering and adoption. Adding a detail sheet would be scope creep.
-- **No authentication.** Both APIs run open. Adding auth would be a whole other story and isn't in scope.
+- **No authentication in `01-answers/`.** Both APIs run open. Auth is a whole story and isn't in the rubric scope.
 - **No i18n / dark mode / animations for the Flutter answers folder.** Kept it deliberately minimal so the diff between "answers" and "showcase" is visible.
-- **No CD (deploy pipeline).** CI covers testing. Deploy pipeline setup is org-specific — I'd want a real conversation about targets before wiring one up.
 
-If the interview goes further, any of these can be added with context on your team's actual conventions.
+**In `02-showcase/` (Pawmise), several of these are deliberately added:**
+
+- Authentication is real: Sanctum token auth, register + login endpoints, protected routes.
+- The Laravel backend now has a frontend consumer: the Flutter app talks to it.
+- Deploy pipeline: planned for Railway + Cloudflare Pages (Phase 4 of the roadmap).
+- Animations and polish: in `02-showcase/flutter`.
+
+If the interview goes further, the decisions doc and architecture doc cover the interesting conversations in advance.
