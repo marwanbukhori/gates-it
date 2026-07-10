@@ -50,8 +50,9 @@ Laravel ^13.8, PHP ^8.3, currently no domain models beyond `User`.
 
 ### Database
 
-- **Postgres** (production-like; matches Phase 4 Railway). Local via the existing
-  `docker/` compose setup.
+- **MySQL 8.4** (production-like) — reuses the existing `docker-compose` service
+  rather than introducing Postgres. Tests run on **SQLite in-memory** (existing
+  `phpunit.xml`). Railway supports MySQL, so Phase 4 is unaffected.
 - Migrations for `pets`, `adoptions`, and the `users.adoptions_count` column.
 - **Factories** for `Pet` and `Adoption`.
 - **Seeder**: ~24 realistic pets (varied species/size/age, some senior, some
@@ -59,13 +60,20 @@ Laravel ^13.8, PHP ^8.3, currently no domain models beyond `User`.
 
 ## Section B — Discount engine → adoption-fee engine
 
-The existing strategies map onto adoption fees with **no rewrite**:
+Adoption fees are modeled by **product-semantic reason** (`FeeDiscount`), each
+backed by a clean engine strategy — composed, not rewritten:
 
-| Existing strategy | Adoption-fee meaning | Trigger |
+| Fee reason (`FeeDiscount`) | Engine strategy | Trigger |
 |---|---|---|
-| `LoyaltyDiscount` | Reward repeat adopters | `user.adoptions_count >= N` |
-| `PercentageDiscount` | Encourage senior adoption | `pet.is_senior` |
-| `FixedDiscount` | Shelter-partner fee waiver | `pet.shelter_partner` |
+| `loyalty` | `PercentageDiscount(loyalty.percentage)` | `user.adoptions_count >= N` |
+| `senior` | `PercentageDiscount(senior.percentage)` | `pet.is_senior` |
+| `shelter_partner` | `FixedDiscount(waiver)` | `pet.shelter_partner` |
+
+**Note:** the existing `LoyaltyDiscount` strategy computes 85%-off (`price -
+0.85*price`) despite a "15% off" label — a mismatch we deliberately do **not**
+build on. Loyalty is instead a configurable percentage via the correct
+`PercentageDiscount`. The legacy `POST /discount` endpoint still exercises all
+three original strategies, so nothing is lost from the assessment.
 
 New class **`Domain/Adoption/AdoptionFeeCalculator`**:
 
@@ -130,7 +138,8 @@ keep the existing `DiscountedPriceResource` for the legacy endpoint.
 **Tooling**
 - Updated **OpenAPI 3.1** spec covering all endpoints.
 - Updated **Postman collection**.
-- Extend existing **GitHub Actions** CI to run against Postgres.
+- Existing **GitHub Actions** CI already runs the suite on SQLite in-memory; keep
+  it green (no MySQL service needed in CI).
 
 ## Acceptance criteria
 

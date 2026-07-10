@@ -41,7 +41,7 @@ Each phase gets its own spec → plan → build cycle. We build one phase at a t
 
 | Phase | Delivers | Rationale |
 |-------|----------|-----------|
-| **1 — Backend foundation & API contract** | Postgres, seeded pets, Sanctum auth, pets + adoption endpoints, discount engine wired to adoption fees, OpenAPI 3.1, tests | The API is the contract everything depends on. |
+| **1 — Backend foundation & API contract** | MySQL, seeded pets, Sanctum auth, pets + adoption endpoints, discount engine wired to adoption fees, OpenAPI 3.1, tests | The API is the contract everything depends on. |
 | **2 — Flutter end-to-end** | Rewire the Flutter app to the live API: browse/filter/detail/adopt persist; login; loyalty discount in the fee; real network + error/loading/offline states | Makes the product *real* — a reviewer can adopt a pet and it sticks. |
 | **3 — Admin panel** | Shelter-staff web UI (Filament/Livewire): CRUD pets, mark adopted, configure promos | Demonstrates internal-tools maturity; makes the demo self-serve. |
 | **4 — Deploy & CI/CD** | Backend + admin on Railway, Flutter web on Cloudflare Pages, one public clickable URL, CI/CD to live, seeded demo data | "Big company" = actually running, not just on a laptop. |
@@ -51,9 +51,9 @@ Each phase gets its own spec → plan → build cycle. We build one phase at a t
 
 - **Flutter web** → Cloudflare Pages (or GitHub Pages) — static, free, no cold
   starts, no expiry.
-- **Laravel backend + Postgres + admin** → Railway (trial credit / ~$5 Hobby),
+- **Laravel backend + MySQL + admin** → Railway (trial credit / ~$5 Hobby),
   scripted via Railway tooling. Sized for a low-traffic 2–3 week reviewer window.
-- Truly-free fallback: Render free tier (accepts cold starts; free Postgres
+- Truly-free fallback: Render free tier (accepts cold starts; free managed DB
   expires after 30 days — fine for the window).
 
 ## Documentation reframe (spanning)
