@@ -50,16 +50,53 @@ class PetListScreen extends ConsumerWidget {
   int _remainingCount(AsyncValue<List<Pet>> pets) =>
       pets.asData?.value.where((p) => !p.isAdopted).length ?? 0;
 
-  void _adopt(BuildContext context, WidgetRef ref, Pet pet) {
-    ref.read(petListControllerProvider.notifier).adopt(pet.id);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${pet.name} is going home. Congratulations!'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+  Future<void> _adopt(BuildContext context, WidgetRef ref, Pet pet) async {
+    final notifier = ref.read(petListControllerProvider.notifier);
+
+    // 1. Optimistic local update — immediate UI feedback.
+    notifier.adopt(pet.id);
+
+    // 2. Fire the live API call in the background.
+    final serverResult = await notifier.adoptOnServer(pet.id);
+
+    if (!context.mounted) return;
+
+    switch (serverResult) {
+      case AdoptServerSuccess(:final result):
+        final fee = result.finalFee.toStringAsFixed(2);
+        final currency = result.currency;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('Adopted \u{1F43E} — fee $currency $fee'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      case AdoptServerAlreadyAdopted():
+        // Pet was already recorded on the server — keep adopted pill.
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Already adopted on the server — keeping it!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+      case AdoptServerOffline():
+        // Network unavailable or auth failure — local state is already updated,
+        // show a subtle offline notice.
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                '${pet.name} marked as adopted locally (offline or auth error).',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+    }
   }
 
   Widget _emptyFor(PetFilter filter) => switch (filter) {
