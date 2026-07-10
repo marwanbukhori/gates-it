@@ -1,76 +1,147 @@
 # Architecture
 
-Both showcase projects follow the same principle: **business rules go in the middle, framework code goes at the edges**. Below is what that looks like for each stack.
+Both parts of `02-showcase/` (Pawmise) follow the same principle: **business rules go in the middle, framework code goes at the edges**. The two products share a common dependency direction: domain → application → infrastructure, never the reverse.
 
-## Laravel — Discount Service
+---
+
+## Laravel — Pawmise API
+
+The backend grew from a stateless discount calculator into a real product API. The discount domain was composed — not modified.
+
+### System overview
 
 ```
-        HTTP boundary                Application            Domain
- ─────────────────────────      ──────────────────      ───────────────────────
-                                                        DiscountService
- POST /api/v1/discount  ──▶  ApplyDiscountRequest ─▶  ┌─────────────────────┐
-                             (Form Request)          │  strategy.assert()   │
-                                                     │  strategy.calculate()│
-                             DiscountController      └──────────┬──────────┘
-                                    │                           │
-                                    │  strategy = factory.make(type, value)
-                                    ▼                           │
-                             DiscountStrategyFactory ──creates──┘
-                                                                │
-                                                                ▼
-                                                     ┌──────────────────────┐
-                                                     │ DiscountStrategyInterface
-                                                     ├──────────────────────┤
-                                                     │ FixedDiscount        │
-                                                     │ PercentageDiscount   │
-                                                     │ LoyaltyDiscount      │
-                                                     └──────────────────────┘
+        HTTP boundary                  Application layer          Domain
+ ─────────────────────────         ──────────────────────      ──────────────────────────
 
- ◀── DiscountedPriceResource ─── final price ─── returns from calculate()
+ POST /auth/register
+ POST /auth/login        ──▶  AuthController
+ GET  /me
 
- (Errors)  InvalidDiscountException.render() ─▶ 400 application/problem+json
+ GET  /pets              ──▶  PetController          ──▶   Pet model (Eloquent)
+ GET  /pets/{id}
+
+ GET  /pets/{id}/        ──▶  FeeQuoteController     ──▶   AdoptionFeeCalculator
+      fee-quote                                             │
+                                                           ├── PercentageDiscount (loyalty)
+ POST /pets/{id}/adopt   ──▶  AdoptionController     ──▶   ├── PercentageDiscount (senior)
+                                                           └── FixedDiscount (shelter-partner)
+
+ GET  /me/adoptions      ──▶  AdoptionController          Adoption model (Eloquent)
+
+ POST /api/v1/discount   ──▶  DiscountController    ──▶   DiscountService (legacy — unchanged)
 ```
 
-### Layers and their rules
+### Folder layout (selected)
+
+```
+app/
+├── Domain/
+│   ├── Discount/                   ← unchanged from assessment — no imports of Illuminate\*
+│   │   ├── Contracts/
+│   │   │   └── DiscountStrategyInterface.php
+│   │   ├── DiscountService.php
+│   │   ├── DiscountStrategyFactory.php
+│   │   ├── Enums/
+│   │   │   └── DiscountStrategyType.php
+│   │   ├── Exceptions/
+│   │   │   └── InvalidDiscountException.php
+│   │   └── Strategies/
+│   │       ├── FixedDiscount.php
+│   │       ├── PercentageDiscount.php
+│   │       └── LoyaltyDiscount.php
+│   │
+│   └── Adoption/                   ← new; composes Domain/Discount
+│       ├── AdoptionFeeCalculator.php
+│       ├── FeeBreakdown.php         (value object)
+│       └── FeeDiscount.php          (enum: loyalty | senior | shelter_partner)
+│
+├── Http/
+│   ├── Controllers/Api/
+│   ├── Requests/
+│   └── Resources/
+│
+├── Models/
+│   ├── User.php                     (+ adoptions_count)
+│   ├── Pet.php                      (species, breed, age, shelter_partner, status)
+│   └── Adoption.php                 (immutable fee record)
+│
+└── Providers/
+    ├── AppServiceProvider.php
+    └── DiscountServiceProvider.php
+```
+
+### Layer rules
 
 | Layer | Path | May depend on | Must not depend on |
 |-------|------|---------------|--------------------|
-| **Domain** | `app/Domain/Discount/` | Symfony HTTP kernel (only for the exception base class) | Anything Laravel-specific |
-| **Application (HTTP)** | `app/Http/{Controllers,Requests,Resources}/` | Domain, Laravel framework | Concrete strategy classes |
+| **Domain/Discount** | `app/Domain/Discount/` | Symfony HTTP kernel (exception base only) | `Illuminate\*` |
+| **Domain/Adoption** | `app/Domain/Adoption/` | `Domain/Discount`, PHP stdlib | `Illuminate\*` |
+| **Application (HTTP)** | `app/Http/` | Domain, Laravel framework | Concrete strategy classes |
+| **Models** | `app/Models/` | Laravel Eloquent | Domain (models are data access, not business logic) |
 | **Providers** | `app/Providers/` | Domain, framework | HTTP layer |
 
-The **domain layer** is the part I'd extract into a package if this discount system were shared across multiple apps. It has zero references to `Illuminate\*`. That's not incidental — it's the design rule.
+The **Domain layers** are the parts I would extract into a package if this code were shared across multiple apps. The adoption calculator delegates all arithmetic to the discount strategies and never touches a Laravel class.
 
-### Why a factory?
+### The fee engine composition
 
-`DiscountController` doesn't know how to build a `PercentageDiscount`. It calls `factory.make(type, value)` and gets back an interface. The factory is bound as a container singleton in `DiscountServiceProvider`, so it's swappable in tests (via `$this->app->instance(...)`) if we ever need to.
+`AdoptionFeeCalculator` receives a `Pet` and a `User` and does three things:
 
-The alternative — a `match` expression inside the controller — works fine for three strategies. It stops working when someone wants to add a strategy that depends on an injected service (a `SeasonalDiscount` reading dates from a calendar service, say). The factory absorbs that change without touching the controller.
+1. Determines which `FeeDiscount` variants apply for that combination (could be multiple).
+2. Selects the single best discount (maximum saving). The selection rule is centralised — easily changed to stacking later.
+3. Instantiates the correct `Domain/Discount` strategy via the `DiscountStrategyFactory` and delegates the arithmetic.
 
-### Why "assert on the strategy" instead of "validate in the service"?
+The output is a `FeeBreakdown` value object: `{ base_fee, discount_type, discount_amount, final_fee }`. This is stored on the `Adoption` record, making every adoption auditable.
 
-In `01-answers/`, `DiscountService::validate()` uses `$this->strategy instanceof PercentageDiscount` to decide which rule to apply. That works for three strategies. It scales terribly.
+```
+AdoptionFeeCalculator::quote(Pet $pet, User $user): FeeBreakdown
+    │
+    ├── senior?       → PercentageDiscount(config('pawmise.senior_discount_pct'))
+    ├── shelter_partner? → FixedDiscount(config('pawmise.shelter_waiver'))
+    └── adoptions_count ≥ N? → PercentageDiscount(config('pawmise.loyalty_discount_pct'))
+                                                    ↑ all three are Domain/Discount strategies
+    → pick best discount (max saving)
+    → DiscountService::applyDiscount(base_fee) → final_fee
+```
 
-In `02-showcase/`, each strategy owns its own `assertApplicableTo()` method. Adding a new strategy adds a new class — no changes to `DiscountService`, no `instanceof` chains anywhere. That's the Open/Closed Principle actually paying off, not just being name-dropped.
+Fee thresholds live in `config/pawmise.php` — no magic numbers in the domain.
 
 ### Error semantics
 
-Two distinct failure modes, two distinct response shapes:
+Two failure modes, two response shapes, the same as the original discount API:
 
-| Failure | Status | Body | Meaning |
-|---------|--------|------|---------|
-| Missing / wrong-shaped field | `422` | Laravel default validation envelope | The request itself is malformed |
-| Well-formed request, invalid discount input | `400` | `application/problem+json` (RFC 7807) | The request parsed fine, but the discount doesn't apply |
+| Failure | Status | Content-Type | Meaning |
+|---------|--------|--------------|---------|
+| Missing / wrong-shaped field | `422` | `application/json` | The request itself is malformed |
+| Well-formed request, invalid business input | `400` | `application/problem+json` | The discount doesn't apply |
+| Pet already adopted | `409` | `application/problem+json` | Concurrent adoption guard |
+| No auth token / expired | `401` | `application/json` | Sanctum standard |
 
-Frontend clients need to distinguish "your form has a bug" from "your input violated a business rule" — different UI, different logging.
+### Adoption transaction
 
-## Flutter — Adoption Home
+`POST /pets/{id}/adopt` runs inside a database transaction:
+
+1. Acquire row lock on the `pets` row.
+2. Assert `pet.status === 'available'` (returns 409 if not).
+3. Compute fee via `AdoptionFeeCalculator`.
+4. Insert `adoptions` record.
+5. Update `pets.status = 'adopted'`.
+6. Increment `users.adoptions_count`.
+7. Commit.
+
+Steps 1–2 together prevent concurrent double-adopts. The lock is released on commit/rollback.
+
+---
+
+## Flutter — Pawmise App
+
+### Folder layout
 
 ```
 lib/
 ├── main.dart                              ProviderScope root
-├── app/                                   cross-cutting concerns
-│   ├── app.dart                           MaterialApp + home
+├── app/
+│   ├── app.dart                           MaterialApp + router
 │   └── theme/                             seedless Material 3
 │       ├── app_colors.dart
 │       ├── app_spacing.dart
@@ -83,7 +154,8 @@ lib/
         │   ├── cat.dart                   Cat (isIndoor)
         │   └── pet_repository.dart        abstract interface class
         ├── data/                          ← concrete impls
-        │   └── in_memory_pet_repository.dart
+        │   ├── in_memory_pet_repository.dart
+        │   └── http_pet_repository.dart   (wired to live backend)
         ├── application/                   ← state + intent
         │   ├── pet_filter.dart            enum
         │   └── pet_providers.dart         Riverpod providers + controllers
@@ -97,16 +169,16 @@ lib/
                 └── empty_state.dart
 ```
 
-### Layers and their rules
+### Layer rules
 
 | Layer | Path | May import | Must not import |
 |-------|------|-----------|-----------------|
-| **Domain** | `features/pets/domain/` | `flutter/foundation` (for `@immutable`) | Anything from `data`, `application`, `presentation` |
+| **Domain** | `features/pets/domain/` | `flutter/foundation` (for `@immutable`) | `data`, `application`, `presentation` |
 | **Data** | `features/pets/data/` | `domain` | `application`, `presentation` |
 | **Application** | `features/pets/application/` | `domain`, `data`, `flutter_riverpod` | `presentation` |
-| **Presentation** | `features/pets/presentation/` | any lower layer | *(top of the stack)* |
+| **Presentation** | `features/pets/presentation/` | any lower layer | *(top of stack)* |
 
-The rule is one-way: **higher layers depend on lower layers, never the reverse**. If I ever wanted to replace Riverpod with Bloc, I'd only touch `application/` and `presentation/`. Domain and data would move over untouched.
+Replacing Riverpod with Bloc would touch only `application/` and `presentation/`. Replacing the HTTP backend with SQLite would touch only `data/`.
 
 ### State flow
 
@@ -128,39 +200,32 @@ The rule is one-way: **higher layers depend on lower layers, never the reverse**
    │ petListControllerProvider  │
    │ (AsyncNotifier<List<Pet>>) │
    │                            │
-   │  - build(): fetch from repo│
-   │  - adopt(id): new list     │
+   │  - build(): fetch from API │
+   │  - adopt(id): POST + new   │
+   │    list from response      │
    └────────┬───────────────────┘
             │  read
             ▼
    ┌───────────────────────┐
    │ petRepositoryProvider │
    │  (Provider — bound to │
-   │   InMemoryPetRepo)    │
+   │   HttpPetRepository)  │
    └───────────────────────┘
 ```
 
-- The screen watches a *derived* provider (`visiblePetsProvider`) that composes the pet list and the current filter. It doesn't watch the pet list directly.
-- `PetListController.adopt(id)` produces a *new* list with a *new* pet instance for the adopted one. The other pets keep the same identity. Riverpod's equality-based rebuild logic sees exactly one changed reference and rebuilds only the affected widget.
-- In tests, `petRepositoryProvider.overrideWithValue(fakeRepo)` swaps the data source without touching anything else. Same pattern would work for an HTTP client, a SQLite backend, or a Firebase reader.
+- The screen watches `visiblePetsProvider`, a derived provider that composes the pet list and the current filter. It doesn't watch the pet list directly.
+- `PetListController.adopt(id)` calls the backend; on success, it produces a new list with the updated pet. Riverpod's equality-based rebuild sees one changed reference.
+- In tests, `petRepositoryProvider.overrideWithValue(fakeRepo)` swaps the data source without touching anything else.
 
 ### Why immutability?
 
-`Pet` is `@immutable`. `Dog.copyWith(isAdopted: true)` returns a *new* Dog, doesn't mutate the old one. This matters because:
+`Pet` is `@immutable`. `Dog.copyWith(isAdopted: true)` returns a new `Dog`, never mutating the original. This matters because:
 
-1. Riverpod diffs by `==`. Immutable objects give correct rebuild signals.
+1. Riverpod diffs by `==`. Immutable objects give correct, granular rebuild signals.
 2. Any widget holding a reference to the old pet still sees the old state — useful for exit animations, undo, etc.
-3. Time-travel debugging and Redux-style dev tooling are effectively free.
-
-### Why "seedless" Material 3?
-
-`ColorScheme.fromSeed()` is a lovely shortcut, but every seeded scheme has a family resemblance — the AI-generated aesthetic the assessment specifically warned against. This uses a hand-picked palette (deep sage / clay rose / paper cream) with species-tinted card surfaces (dogs on warm ochre, cats on muted clay-rose) so the two lists visually read differently at a glance.
-
-Custom fonts — Fraunces (display) + Plus Jakarta Sans (body) — do a similar job. They're distinctive enough that the app looks like it has a brand, but not so quirky they get in the way of scannability.
+3. Time-travel debugging is effectively free.
 
 ### Adaptive layout
-
-The grid picks its column count from `LayoutBuilder(constraints.maxWidth)`:
 
 ```dart
 final columns = switch (constraints.maxWidth) {
@@ -171,4 +236,8 @@ final columns = switch (constraints.maxWidth) {
 };
 ```
 
-Same code renders as a single-column list on a phone and a 4-column grid on a desktop. No `MediaQuery` checks scattered through the codebase, no separate widget trees, no `if (isMobile) …`. Screenshots in the top-level README show both.
+`LayoutBuilder` drives the column count. Same code renders as a single-column list on a phone and a four-column grid on a desktop. No `MediaQuery` checks scattered through the codebase, no separate widget trees.
+
+### Why "seedless" Material 3?
+
+`ColorScheme.fromSeed()` is a fine shortcut, but every seeded scheme has a family resemblance — exactly what the assessment brief warned against. This uses a hand-picked palette (deep sage / clay rose / paper cream) with species-tinted card surfaces (dogs on warm ochre, cats on muted clay-rose), so the two lists read differently at a glance. Custom fonts (Fraunces display + Plus Jakarta Sans body) give the app a distinctive look without getting in the way of scannability.
