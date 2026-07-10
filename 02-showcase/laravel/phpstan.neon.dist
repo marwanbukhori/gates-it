@@ -1,0 +1,12 @@
+parameters:
+    level: 8
+    paths:
+        - app
+        - routes
+        - tests
+    excludePaths:
+        - vendor
+    checkMissingIterableValueType: false
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        - '#Property .*\$strategy \(App\\Domain\\Discount\\Enums\\DiscountStrategyType\) does not accept mixed#'

@@ -1,0 +1,145 @@
+openapi: 3.1.0
+info:
+  title: Discount Service API
+  version: 1.0.0
+  summary: Apply discount strategies to a product's price.
+  description: |
+    Reference implementation of the GATES IT Solution Full-Stack Developer
+    assessment (Laravel portion). The API exposes a single endpoint that
+    accepts a base price plus a chosen discount strategy and returns the
+    final price.
+
+    Strategies:
+
+    - `fixed`      — subtract a fixed amount (must not exceed the price)
+    - `percentage` — subtract a percentage (0–100)
+    - `loyalty`    — flat "loyal customer" rate; ignores the `value` field
+
+    Invalid business inputs return `400 Bad Request` with an
+    RFC 7807-flavoured `application/problem+json` payload. Malformed
+    requests (missing / wrong-shaped fields) return `422 Unprocessable
+    Entity` in Laravel's default validation format.
+  contact:
+    name: Marwan Bukhori
+    email: marwanbukhori.dev@gmail.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local dev (php artisan serve)
+  - url: http://localhost/api
+    description: Local dev via docker-compose (nginx + php-fpm)
+
+paths:
+  /api/v1/discount:
+    post:
+      operationId: applyDiscount
+      summary: Apply a discount strategy to a base price
+      tags: [Discount]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyDiscountRequest'
+            examples:
+              fixed:
+                summary: Fixed amount off
+                value: { price: 200, strategy: fixed, value: 50 }
+              percentage:
+                summary: Percentage off
+                value: { price: 100, strategy: percentage, value: 25 }
+              loyalty:
+                summary: Loyalty rate
+                value: { price: 100, strategy: loyalty }
+      responses:
+        '200':
+          description: Discounted price
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscountedPriceEnvelope'
+              examples:
+                fixed:
+                  value:
+                    data:
+                      strategy: fixed
+                      strategy_label: Fixed amount
+                      original_price: 200
+                      final_price: 150
+                      discount_amount: 50
+                      discount_percent: 25
+                      currency: MYR
+        '400':
+          description: Business-rule violation (invalid discount input)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Request shape / validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+components:
+  schemas:
+    ApplyDiscountRequest:
+      type: object
+      required: [price, strategy]
+      properties:
+        price:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 100
+        strategy:
+          type: string
+          enum: [fixed, percentage, loyalty]
+        value:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Required for `fixed` and `percentage`. Ignored for `loyalty`.
+
+    DiscountedPriceEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DiscountedPrice'
+
+    DiscountedPrice:
+      type: object
+      properties:
+        strategy:         { type: string, enum: [fixed, percentage, loyalty] }
+        strategy_label:   { type: string }
+        original_price:   { type: number, format: double }
+        final_price:      { type: number, format: double }
+        discount_amount:  { type: number, format: double }
+        discount_percent: { type: number, format: double }
+        currency:         { type: string, example: MYR }
+
+    Problem:
+      type: object
+      description: RFC 7807-flavoured problem details.
+      properties:
+        type:   { type: string, format: uri }
+        title:  { type: string }
+        status: { type: integer, example: 400 }
+        detail: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }

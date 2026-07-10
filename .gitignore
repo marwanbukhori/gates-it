@@ -1,0 +1,40 @@
+# Root ignore rules for the whole assessment.
+# Each sub-project has its own more granular .gitignore too.
+
+# PHP / Composer
+**/vendor/
+**/*.phpunit.result.cache
+**/.phpunit.cache/
+
+# Laravel runtime
+02-showcase/laravel/.env
+02-showcase/laravel/.env.backup
+02-showcase/laravel/storage/*.key
+02-showcase/laravel/storage/framework/cache/
+02-showcase/laravel/storage/framework/sessions/
+02-showcase/laravel/storage/framework/views/
+02-showcase/laravel/storage/logs/
+02-showcase/laravel/bootstrap/cache/
+02-showcase/laravel/database/database.sqlite
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+
+# IDE
+**/.idea/
+**/.vscode/
+*.iml
+
+# Node
+**/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
