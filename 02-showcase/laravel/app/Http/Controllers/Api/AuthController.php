@@ -18,10 +18,12 @@ final class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
+        // Password is hashed by the User model's 'hashed' cast — no explicit
+        // Hash::make here (that would double-hash and break login).
         $user = User::create([
             'name'     => $request->validated('name'),
             'email'    => $request->validated('email'),
-            'password' => Hash::make($request->validated('password')),
+            'password' => $request->validated('password'),
         ]);
 
         return $this->tokenResponse($user, Response::HTTP_CREATED);

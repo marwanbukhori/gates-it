@@ -71,4 +71,21 @@ final class AuthEndpointTest extends TestCase
             ->assertJsonPath('data.adoptions_count', 2)
             ->assertJsonPath('data.id', $user->id);
     }
+
+    #[Test]
+    public function a_registered_user_can_immediately_log_in(): void
+    {
+        // Guards against password double-hashing: the password set at
+        // registration must verify at login.
+        $this->postJson('/api/v1/auth/register', [
+            'name'     => 'Round Trip',
+            'email'    => 'round@pawmise.test',
+            'password' => 'secret1234',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/auth/login', [
+            'email'    => 'round@pawmise.test',
+            'password' => 'secret1234',
+        ])->assertOk()->assertJsonStructure(['token', 'user']);
+    }
 }
