@@ -1,145 +1,175 @@
 openapi: 3.1.0
 info:
-  title: Discount Service API
-  version: 1.0.0
-  summary: Apply discount strategies to a product's price.
-  description: |
-    Reference implementation of the GATES IT Solution Full-Stack Developer
-    assessment (Laravel portion). The API exposes a single endpoint that
-    accepts a base price plus a chosen discount strategy and returns the
-    final price.
-
-    Strategies:
-
-    - `fixed`      — subtract a fixed amount (must not exceed the price)
-    - `percentage` — subtract a percentage (0–100)
-    - `loyalty`    — flat "loyal customer" rate; ignores the `value` field
-
-    Invalid business inputs return `400 Bad Request` with an
-    RFC 7807-flavoured `application/problem+json` payload. Malformed
-    requests (missing / wrong-shaped fields) return `422 Unprocessable
-    Entity` in Laravel's default validation format.
-  contact:
-    name: Marwan Bukhori
-    email: marwanbukhori.dev@gmail.com
-
+  title: Pawmise API
+  version: "1.0.0"
+  description: >
+    Pet-adoption platform API. Public endpoints for browsing pets and auth;
+    Sanctum bearer-token endpoints for quoting fees, adopting, and history.
+    The legacy POST /discount endpoint exposes the raw discount engine.
 servers:
-  - url: http://localhost:8000
-    description: Local dev (php artisan serve)
-  - url: http://localhost/api
-    description: Local dev via docker-compose (nginx + php-fpm)
-
+  - url: /api/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        species: { type: string }
+        breed: { type: string, nullable: true }
+        age_years: { type: integer }
+        size: { type: string, enum: [small, medium, large] }
+        gender: { type: string, enum: [male, female] }
+        description: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        base_fee: { type: number }
+        status: { type: string, enum: [available, pending, adopted] }
+        shelter_partner: { type: boolean }
+        is_senior: { type: boolean }
+        currency: { type: string }
+    FeeBreakdown:
+      type: object
+      properties:
+        base_fee: { type: number }
+        discount_type: { type: string, nullable: true, enum: [loyalty, senior, shelter_partner] }
+        discount_amount: { type: number }
+        final_fee: { type: number }
+        currency: { type: string }
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
 paths:
-  /api/v1/discount:
+  /discount:
     post:
-      operationId: applyDiscount
-      summary: Apply a discount strategy to a base price
-      tags: [Discount]
+      security: []
+      summary: Apply a discount (legacy raw engine)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ApplyDiscountRequest'
-            examples:
-              fixed:
-                summary: Fixed amount off
-                value: { price: 200, strategy: fixed, value: 50 }
-              percentage:
-                summary: Percentage off
-                value: { price: 100, strategy: percentage, value: 25 }
-              loyalty:
-                summary: Loyalty rate
-                value: { price: 100, strategy: loyalty }
+              type: object
+              required: [price, strategy]
+              properties:
+                price: { type: number }
+                strategy: { type: string, enum: [fixed, percentage, loyalty] }
+                value: { type: number, nullable: true }
       responses:
-        '200':
-          description: Discounted price
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DiscountedPriceEnvelope'
-              examples:
-                fixed:
-                  value:
-                    data:
-                      strategy: fixed
-                      strategy_label: Fixed amount
-                      original_price: 200
-                      final_price: 150
-                      discount_amount: 50
-                      discount_percent: 25
-                      currency: MYR
-        '400':
-          description: Business-rule violation (invalid discount input)
+        "200": { description: Discounted price }
+        "400":
+          description: Invalid discount input
           content:
             application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '422':
-          description: Request shape / validation failure
+              schema: { $ref: "#/components/schemas/Problem" }
+  /auth/register:
+    post:
+      security: []
+      summary: Register and receive a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+      responses:
+        "201": { description: Created with token }
+  /auth/login:
+    post:
+      security: []
+      summary: Log in and receive a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200": { description: Token }
+        "422": { description: Invalid credentials }
+  /me:
+    get:
+      summary: Current user
+      responses:
+        "200": { description: The authenticated user }
+        "401": { description: Unauthenticated }
+  /pets:
+    get:
+      security: []
+      summary: List adoptable pets
+      parameters:
+        - { name: species, in: query, schema: { type: string } }
+        - { name: size, in: query, schema: { type: string, enum: [small, medium, large] } }
+        - { name: status, in: query, schema: { type: string, enum: [available, pending, adopted] } }
+        - { name: senior, in: query, schema: { type: boolean } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Paginated pets
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationError'
-
-components:
-  schemas:
-    ApplyDiscountRequest:
-      type: object
-      required: [price, strategy]
-      properties:
-        price:
-          type: number
-          format: double
-          exclusiveMinimum: 0
-          example: 100
-        strategy:
-          type: string
-          enum: [fixed, percentage, loyalty]
-        value:
-          type: number
-          format: double
-          nullable: true
-          description: |
-            Required for `fixed` and `percentage`. Ignored for `loyalty`.
-
-    DiscountedPriceEnvelope:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/DiscountedPrice'
-
-    DiscountedPrice:
-      type: object
-      properties:
-        strategy:         { type: string, enum: [fixed, percentage, loyalty] }
-        strategy_label:   { type: string }
-        original_price:   { type: number, format: double }
-        final_price:      { type: number, format: double }
-        discount_amount:  { type: number, format: double }
-        discount_percent: { type: number, format: double }
-        currency:         { type: string, example: MYR }
-
-    Problem:
-      type: object
-      description: RFC 7807-flavoured problem details.
-      properties:
-        type:   { type: string, format: uri }
-        title:  { type: string }
-        status: { type: integer, example: 400 }
-        detail: { type: string }
-        errors:
-          type: object
-          additionalProperties:
-            type: array
-            items: { type: string }
-
-    ValidationError:
-      type: object
-      properties:
-        message: { type: string }
-        errors:
-          type: object
-          additionalProperties:
-            type: array
-            items: { type: string }
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Pet" } }
+  /pets/{pet}:
+    get:
+      security: []
+      summary: Show one pet
+      parameters:
+        - { name: pet, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: A pet }
+        "404": { description: Not found }
+  /pets/{pet}/fee-quote:
+    get:
+      summary: Preview the adoption fee for the current user
+      parameters:
+        - { name: pet, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Fee breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FeeBreakdown" }
+        "401": { description: Unauthenticated }
+  /pets/{pet}/adopt:
+    post:
+      summary: Adopt a pet
+      parameters:
+        - { name: pet, in: path, required: true, schema: { type: integer } }
+      responses:
+        "201": { description: Adoption record }
+        "401": { description: Unauthenticated }
+        "409":
+          description: Pet not available
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+  /me/adoptions:
+    get:
+      summary: The current user's adoption history
+      responses:
+        "200": { description: Paginated adoptions }
+        "401": { description: Unauthenticated }
