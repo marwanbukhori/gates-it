@@ -18,11 +18,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Idempotent so it is safe to run on every deploy/boot in production.
-        User::firstOrCreate(
-            ['email' => 'demo@pawmise.test'],
-            ['name' => 'Demo Adopter', 'password' => 'password'],
-        );
+        // Idempotent so it is safe to run on every deploy/boot.
+        // The fixed-password demo user is LOCAL-ONLY — never bake a known
+        // credential into a deployed (public-repo) environment. In a deploy,
+        // users are created at runtime via POST /api/v1/auth/register.
+        if (app()->environment('local')) {
+            User::firstOrCreate(
+                ['email' => 'demo@pawmise.test'],
+                ['name' => 'Demo Adopter', 'password' => env('DEMO_USER_PASSWORD', 'password')],
+            );
+        }
 
         if (Pet::query()->exists()) {
             return;
